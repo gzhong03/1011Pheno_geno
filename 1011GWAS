@@ -1,0 +1,65 @@
+# running GWAS w/o chr17
+import numpy as np
+import pysnptools.util
+from fastlmm.association import single_snp
+from pysnptools.snpreader import Bed
+import fastlmm.util.util as flutil
+import pylab
+
+
+# set up data
+##############################
+# File paths (as per your setup)
+bed_fn ="$"
+snp_reader = Bed(bed_fn, count_A1=True)
+pheno_fn = "$"
+cov_fn = "$"
+
+
+# Select SNPs on chromosomes 1 through 16
+snp_reader = Bed(bed_fn,count_A1=True)
+
+# partition snps on chr17 vs rest
+excluded_chr = 17
+
+G0 = snp_reader[:, snp_reader.pos[:, 0] != excluded_chr]  
+G1 = snp_reader[:, snp_reader.pos[:, 0] != excluded_chr]  
+
+# Use all remaining SNPs for association testing
+test_snps = snp_reader[:, snp_reader.pos[:, 0] != excluded_chr]
+##############################
+
+# run GWAS
+###################################################################
+
+results_df = single_snp(test_snps, pheno_fn, K0=G0, K1=G1, covar=cov_fn, GB_goal=2, count_A1=True)
+###################################################################
+
+#save output file
+output_file = "D:\\aaa_murphy_lab\\gwas\\SLAD\\strip_chr17\\SLAD_wo_chr17_snps.csv"
+results_df.to_csv(output_file, index=False)
+print(f"Full GWAS results saved to {output_file}")
+
+# Filter significant SNPs based on a p-value threshold 
+pvalue_threshold = 0.012114775
+
+significant_snps = results_df[results_df['PValue'] < pvalue_threshold]
+
+# Save the significant SNPs to a separate file
+significant_output_file ="D:\\aaa_murphy_lab\\gwas\\SLAD\\strip_chr17\\SLAD_sig_wo_chr17_snps.csv"
+significant_snps.to_csv(significant_output_file, index=False)
+print(f"Significant SNPs (PValue < {pvalue_threshold}) saved to {significant_output_file}")
+
+# manhattan plot
+import pylab
+import fastlmm.util.util as flutil
+pylab.rcParams['figure.figsize'] = (10.0, 8.0)#For some reason, need again (appears above too) to get big figures
+flutil.manhattan_plot(results_df[["Chr", "ChrPos", "PValue"]].values, pvalue_line=pvalue_threshold,xaxis_unit_bp=False)
+pylab.savefig("path$")
+pylab.show()
+
+# qq plot
+from fastlmm.util.stats import plotp
+plotp.qqplot(results_df["PValue"].values, xlim=[0,5], ylim=[0,5])
+pylab.savefig("path$")
+pylab.show()
