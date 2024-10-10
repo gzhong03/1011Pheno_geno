@@ -1,0 +1,123 @@
+import os
+import numpy as np
+from skimage import io, color, morphology, measure
+import matplotlib.pyplot as plt
+from scipy.ndimage import gaussian_filter1d, binary_fill_holes, gaussian_filter
+
+def find_background_threshold(image):
+    if len(image.shape) == 3:
+        image_gray = color.rgb2gray(image)
+    else:
+        image_gray = image
+
+    pixel_values = image_gray.flatten()
+    hist, bin_edges = np.histogram(pixel_values, bins=256, range=(0, 1))
+    smoothed_hist = gaussian_filter1d(hist, sigma=2)
+    peak_index = np.argmax(smoothed_hist)
+
+    threshold = None
+    for i in range(peak_index + 1, len(smoothed_hist)):
+        if smoothed_hist[i] < smoothed_hist[peak_index] * 0.04:
+            threshold = bin_edges[i]
+            break
+
+    return threshold
+
+image_path = "$"
+
+# Load the image
+colony = io.imread(image_path)
+
+if colony.shape[-1] == 4:
+    colony = color.rgba2rgb(colony)
+
+# Convert image to grayscale by averaging the color channels if necessary
+if len(colony.shape) == 3:
+    colony_gray = color.rgb2gray(colony)
+else:
+    colony_gray = colony
+
+pixel_values = colony_gray.flatten()
+
+# Find the background threshold
+background_threshold = find_background_threshold(colony_gray)
+print(f'Background Threshold: {background_threshold}')
+
+# Determine the white threshold
+white_threshold = 0.63
+
+print(f"Background Threshold: {background_threshold}")
+print(f"White Threshold: {white_threshold}")
+
+# Plot original image
+plt.figure(figsize=(4, 4))
+plt.imshow(colony, cmap='gray')
+plt.title('Original Image')
+plt.axis('off')
+plt.show()
+
+# Process the image to classify pixels
+for i in range(colony_gray.shape[0]):
+    for j in range(colony_gray.shape[1]):
+        if colony_gray[i][j] > white_threshold:
+            colony_gray[i][j] = 255
+        elif colony_gray[i][j] < background_threshold:
+            colony_gray[i][j] = 0
+        else:
+            colony_gray[i][j] = 128
+
+# Plot the intermediate processed image
+plt.figure(figsize=(4, 4))
+plt.imshow(colony_gray, cmap='gray')
+plt.title('Intermediate Processed Image')
+plt.axis('off')
+plt.show()
+
+# Create a binary mask of the white pixels
+binary_mask = colony_gray == 255
+
+# Label connected components
+labeled_mask, num_features = measure.label(binary_mask, return_num=True, connectivity=2)
+
+# Fill gaps within each connected component
+filled_mask = np.zeros_like(binary_mask)
+for label in range(1, num_features + 1):
+    component_mask = labeled_mask == label
+    filled_component = binary_fill_holes(component_mask)
+    filled_mask[filled_component] = 1
+
+smoothed_mask = morphology.opening(filled_mask, morphology.disk(3))
+
+# Optionally, apply Gaussian filter for additional smoothing
+smoothed_mask = gaussian_filter(smoothed_mask.astype(float), sigma=1)
+
+# Update the original image to reflect the filled regions
+colony_gray[smoothed_mask > 0.5] = 200
+
+# Reset white pixels not covered by the smoothed mask to gray (128)
+for i in range(colony_gray.shape[0]):
+    for j in range(colony_gray.shape[1]):
+        if colony_gray[i][j] == 255:
+            colony_gray[i][j] = 128
+
+# Plot the final processed image
+plt.figure(figsize=(4, 4))
+plt.imshow(colony_gray, cmap='gray')
+plt.title('Final Processed Image')
+plt.axis('off')
+plt.show()
+
+# Save the final processed image
+output_folder = "$"
+if not os.path.exists(output_folder):
+    os.makedirs(output_folder)
+output_image_path = os.path.join(output_folder, os.path.basename(image_path))
+plt.imsave(output_image_path, colony_gray, cmap='gray')
+print(f"Final processed image saved to: {output_image_path}")
+
+# Calculate the ratio of pixels
+center = np.sum(smoothed_mask > 0.5)
+outer = np.sum(colony_gray == 128)
+print("center pixels, outer pixels:", center, ",", outer)
+socialgrowth = 100 * outer / center
+print("social growth %:", socialgrowth)
