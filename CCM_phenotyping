@@ -1,0 +1,83 @@
+import tensorflow as tf
+from tensorflow.keras import layers, models
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
+import os
+from tensorflow.keras.applications import MobileNetV2
+from tensorflow.keras.layers import Dense, GlobalAveragePooling2D
+from tensorflow.keras.models import Model
+
+main_directory = $""
+
+# Load data parameters
+batch_size = 32 
+img_height = 224
+img_width = 224
+
+
+def preprocess_images(image, label):
+    image = tf.image.adjust_contrast(image, 2)
+    image = tf.image.resize(image, [img_height, img_width])
+    image = tf.image.random_brightness(image, max_delta=0.1) 
+        
+    return image, label
+
+def load_and_preprocess_data(path, subset):
+    ds = tf.keras.preprocessing.image_dataset_from_directory(
+        path,
+        subset=subset,
+        seed=123,
+        image_size=(img_height, img_width),
+        batch_size=batch_size)
+    
+    # Apply custom preprocessing
+    ds = ds.map(preprocess_images)
+    
+    # Apply normalization
+    normalization_layer = tf.keras.layers.Rescaling(1./255)
+    ds = ds.map(lambda x, y: (normalization_layer(x), y))
+    
+    return ds
+
+train_ds = load_and_preprocess_data(main_directory, "training")
+val_ds = load_and_preprocess_data(main_directory, "validation")
+
+
+def create_model():
+    base_model = MobileNetV2(weights='imagenet', include_top=False, input_shape=(img_height, img_width, 3))
+    base_model.trainable = False
+
+    inputs = tf.keras.Input(shape=(img_height, img_width, 3))
+    # Directly pass inputs through the base model
+    x = base_model(inputs, training=False)  # Ensure the base model is in inference mode
+    x = layers.GlobalAveragePooling2D()(x) # reduce spatial dimension for feature map: 4*4*1280 to 1280
+    x = layers.Dense(512, activation='relu')(x) # ReLU sets all nega facotrs to 0, introduces non-linearity, allowing the network to learn more complex patterns
+    x = layers.Dropout(0.5)(x)
+    outputs = layers.Dense(4, activation='softmax')(x)  # the amount of output classes, n=4 
+
+    model = Model(inputs, outputs)
+    return model
+
+model = create_model()
+
+model.compile(optimizer='adam',
+              loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=False),
+              metrics=['accuracy'])
+
+early_stopping = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=3, restore_best_weights=True)
+
+epochs = 8 
+
+history = model.fit(
+    train_ds,
+    validation_data=val_ds,
+    epochs=epochs,
+    callbacks=[early_stopping]
+)
+
+# Evaluate the model on the validation set
+val_loss, val_accuracy = model.evaluate(val_ds)
+print(f"Validation Accuracy: {val_accuracy * 100}%")
+
+# Evaluate the model on the training set
+train_loss, train_accuracy = model.evaluate(train_ds)
+print(f"Training Accuracy: {train_accuracy * 100}%")
