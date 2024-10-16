@@ -36,7 +36,7 @@ results_df = single_snp(test_snps, pheno_fn, K0=G0, K1=G1, covar=cov_fn, GB_goal
 ###################################################################
 
 #save output file
-output_file = "D:\\aaa_murphy_lab\\gwas\\SLAD\\strip_chr17\\SLAD_wo_chr17_snps.csv"
+output_file = "$"
 results_df.to_csv(output_file, index=False)
 print(f"Full GWAS results saved to {output_file}")
 
@@ -46,7 +46,7 @@ pvalue_threshold = 0.012114775
 significant_snps = results_df[results_df['PValue'] < pvalue_threshold]
 
 # Save the significant SNPs to a separate file
-significant_output_file ="D:\\aaa_murphy_lab\\gwas\\SLAD\\strip_chr17\\SLAD_sig_wo_chr17_snps.csv"
+significant_output_file ="$"
 significant_snps.to_csv(significant_output_file, index=False)
 print(f"Significant SNPs (PValue < {pvalue_threshold}) saved to {significant_output_file}")
 
