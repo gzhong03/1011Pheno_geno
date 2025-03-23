@@ -1,0 +1,47 @@
+#mapping using new gff
+import pandas as pd
+
+def load_genome_annotations(gff_file):
+    annotations = []
+    with open(gff_file, 'r') as file:
+        for line in file:
+            if line.startswith('#'):
+                continue
+            parts = line.strip().split('\t')
+            if len(parts) < 9:  # Ensure there are at least 9 fields
+                continue
+            if parts[2] == 'gene':
+                chrom = parts[0]
+                start = int(parts[3])
+                end = int(parts[4])
+                info = parts[8]
+                gene_id = None
+                for field in info.split(';'):
+                    if field.startswith('ID='):
+                        gene_id = field.split('=')[1]
+                if gene_id:  # Ensure gene_id is not None
+                    annotations.append((chrom, start, end, gene_id))
+    return annotations
+
+def map_snp_to_gene(chrom, pos, annotations):
+    for annot in annotations:
+        if annot[0] == chrom and annot[1] <= pos <= annot[2]:
+            return annot[3]
+    return None
+
+# Load genome annotations
+gff_file = "$$" #upload gff file here 
+annotations = load_genome_annotations(gff_file)
+
+# Load SNP data
+snp_file = "$$" # upload SNP file as csv here 
+snps = pd.read_csv(snp_file)
+
+# Map each SNP to a gene based on chromosome and position only
+snps['Gene'] = snps.apply(lambda row: map_snp_to_gene(row['Chromosome'], row['Position'], annotations), axis=1)
+
+# Save the results to a new CSV file
+output_file = "$$" #save mapped SNP-gene result as a csv file to a certain location on your laptop
+snps.to_csv(output_file, index=False)
+
+print(f"Mapping completed and saved to {output_file}")
